@@ -42,6 +42,7 @@ public:
         return out;
     }
 
+
     friend class Cont;
     friend class Cont_economii;
     friend class Cont_curent;
@@ -110,12 +111,33 @@ public:
             return false;
     }
 
+    int validare()
+    {
+        try
+        {
+            if(data_cont.luna>12 || data_cont.luna<1) throw 1;
+            if(data_cont.an<1990) throw 1;
+            if(sold<0) throw 1;
+        }
+        catch(int x)
+        {
+            cout<<"Date nevalide!"<<endl;
+            return 1;
+        }
+        return 0;
+    }
 
+    virtual ~Cont()
+    {
+
+    }
 };
 
 class Cont_economii:  public Cont
 {
 private:
+    float istoric_dobanzi[100];
+    int ist_indice;
     float dobanda;
     int tip_dobanda;
 public:
@@ -130,6 +152,8 @@ public:
         dobanda=dob;
         tip_dobanda=tip_dob;
     }
+
+    int get_timp_dobanda(){return tip_dobanda;}
 
     friend istream &operator>>(istream&in, Cont_economii &c)
     {
@@ -147,11 +171,45 @@ public:
         return in;
     }
 
+    void actualizare_istoric_dobanzi(int nr_luni)
+    {
+        ist_indice=nr_luni/tip_dobanda;
+        istoric_dobanzi[0]=(1+dobanda)*sold;
+        for(int i=1;i<ist_indice;i++)
+            istoric_dobanzi[i]=istoric_dobanzi[i-1]*(1+dobanda);
+    }
+
+    void afisare_istoric_dobanzi()
+    {
+        for(int i=0;i<ist_indice;i++)
+            cout<<istoric_dobanzi[i]<<" ";
+    }
+
     void afisare()
     {
         Cont::afisare();
         cout<<"Dobanda: "<<dobanda<<endl;
         cout<<"Tip dobanda: "<<tip_dobanda<<endl;
+    }
+
+    int validare()
+    {
+        Cont *c=this;
+        int v=c->validare();
+        if(v==1) return v;
+        try
+        {
+            if(dobanda<0 || dobanda >0.5)
+                throw 1;
+            if(tip_dobanda!=3 && tip_dobanda!=6 && tip_dobanda!=12)
+                throw 1;
+        }
+        catch(int x)
+        {
+            cout<<"Date nevalide!"<<endl;
+            return 1;
+        }
+        return 0;
     }
 
 };
@@ -192,9 +250,47 @@ public:
         Cont::afisare();
         cout<<"Nr de tranzactii gratuite:"<<gratuit<<endl;
     }
+
+    int actualizare_sold(Tranzactie t)
+    {
+
+        if(sold+t.valoare<=0) return -1;
+        if(gratuit<=0) if(sold+t.valoare*(1+2/100)<=0) return -1;
+        sold+=t.valoare;
+        gratuit--;
+        return 1;
+    }
+
+    virtual int validare()
+    {
+        Cont *c=this;
+        int v=c->validare();
+        if(v==1) return v;
+        try
+        {
+            if(gratuit<0) throw 1;
+        }
+        catch(int x)
+        {
+            cout<<"Date nevalide!"<<endl;
+            return 1;
+        }
+        return 0;
+    }
 };
 
 
+template <class T>
+void dobanda_12_luni(T* c)
+{
+    return;
+}
+template <>
+void dobanda_12_luni<Cont_economii>(Cont_economii* c)
+{
+    if(c->get_timp_dobanda()==12) c->afisare();
+
+}
 template <class T>
 class GestionareConturi {
 public:
@@ -270,6 +366,12 @@ public:
         }
     }
 
+    void af_cont_dob()
+    {
+        for(int i=1;i<id;i++)
+            {cout<<typeid( *c[i]  ).name();   dobanda_12_luni(*c[i]);}
+    }
+
     void afisez()
     {
         auto it = m.begin();
@@ -287,35 +389,9 @@ int GestionareConturi<T>::id=0;
 
 
 
-
-
-int main()
+void citire(GestionareConturi<Cont*> &g, int nr_conturi)
 {
-    /*data date;
-    date.an=2020;
-    date.luna=1;
-    Cont *p=new Cont("Dragos", 300,date);
-    Cont *q=new Cont_economii("Ion",3000,date,0.2,3);
-    GestionareConturi<Cont*> g;
-    g.adaug_cont(p);
-    g.adaug_cont(q);
-    cout<<GestionareConturi<Cont>::id;
-    //p.afisare();
-    g.afisez_conturi();*/
-    Tranzactie t(30);
-    Tranzactie q(-40);
-    Tranzactie p(-2000);
-    cout<<t<<endl<<q<<endl<<p<<endl;
-
-    GestionareConturi<Cont*> g;
-
-
-
-    cout<<"AAAAAAAAA"<<endl;
-
     Cont *c[100];
-    int nr_conturi;
-    cin>>nr_conturi;
     for(int i=0;i<nr_conturi;i++)
     {
         string aleg;
@@ -331,8 +407,12 @@ int main()
         {
             Cont *ax=new Cont;
             cin>>*ax;
+            if(ax->validare()==0)
+            {
             c[i]=ax;
             g+=ax;
+            }
+            else {delete ax; i--;}
 
         }
 
@@ -340,18 +420,89 @@ int main()
         {
             Cont_economii *ax=new Cont_economii;
             cin>>*ax;
+            if(ax->validare()==0)
+            {
             c[i]=ax;
             g+=c[i];
+            }
+            else {delete ax; i--;}
         }
 
         if(aleg=="curent")
         {
             Cont_curent *ax=new Cont_curent;
             cin>>*ax;
+            if(ax->validare()==0)
+            {
             c[i]=ax;
             g+=c[i];
+            }
+            else {delete ax; i--;}
         }
     }
+
+}
+
+void gestionare_tranzactii(GestionareConturi<Cont*> &g, int nr_conturi)
+{
+    while(1)
+    {
+    int trz=-1;
+    cout<<"Doriti sa efectuati tranzactii?"<<endl<<1<<" DA"<<endl<<2<<" NU"<<endl;
+    cin>>trz;
+    while(trz!=2)
+    {
+        cout<<"Pe ce cont doriti sa realizati o tranzactie? ";
+        int kont;
+        cin>>kont;
+        cout<<"Ce valoare doriti sa aibe tranzactia? ";
+        int val;
+        cin>>val;
+        Tranzactie t(val);
+        g.adaug_tranzactie(kont,t);
+        cout<<"Mai doriti sa realizati si alte tranzactii? "<<endl<<1<<" DA"<<endl<<2<<" NU"<<endl;
+        cin>>trz;
+
+    }
+    int afc=1;
+    cout<<"Doriti sa afisati un cont?"<<endl;
+    cin>>afc;
+    while(afc!=2)
+    {
+        cout<<"Pe ce cont?";
+        int id;
+        cin>>id;
+        g.afisez_tranzactii(id);
+        cout<<"Mai doriti sa afisati si alte conturi?"<<endl<<1<<" DA"<<endl<<2<<" NU"<<endl;
+        cin>>afc;
+    }
+    int fin;
+    cout<<"Doriti sa va opriti?"<<endl<<1<<" DA"<<endl<<2<<" NU"<<endl;
+    cin>>fin;
+    if(fin==1) break;
+
+
+}}
+
+
+int main()
+{   Cont_economii asd;
+    cout<<typeid(asd).name();
+    Tranzactie t(30);
+    Tranzactie q(-40);
+    Tranzactie p(-2000);
+    cout<<t<<endl<<q<<endl<<p<<endl;
+
+    GestionareConturi<Cont*> g;
+
+
+    Cont *c[100];
+    int nr_conturi;
+    cin>>nr_conturi;
+     citire(g,nr_conturi);
+     gestionare_tranzactii(g,nr_conturi);
+
+    cout<<endl;
     g.afisez_conturi();
     int trz=-1;
     cout<<"Doriti sa efectuati tranzactii?"<<endl<<1<<" DA"<<endl<<2<<" NU"<<endl;
@@ -371,14 +522,11 @@ int main()
 
     }
 
-    //for(int i=0;i<nr_conturi;i++)
-      //  c[i]->afisare();
-      g.afisez_conturi();
+    cout<<"Tranzactii: "<<GestionareConturi<Cont>::id<<endl;
+    for(int i=1;i<=g.getid();i++)
+    g.afisez_tranzactii(i);
+    cout<<endl;
+    g.af_cont_dob();
 
-      cout<<"Tranzactii: "<<GestionareConturi<Cont>::id<<endl;
-      for(int i=1;i<=g.getid();i++)
-        g.afisez_tranzactii(i);
-      cout<<endl;
-      //g.afisez_tranzactii(2);
     return 0;
 }
